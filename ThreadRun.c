@@ -13,9 +13,10 @@ int main(){
   my_pthread_t thread;
 
   my_pthread_create(&thread, (void*) thread_run, (void*) NULL);
-
-  while(1){
+int count = 0;
+  while(count != 10){
     printf("Main Thread Running\n");
+count++;
   }
 
 }
