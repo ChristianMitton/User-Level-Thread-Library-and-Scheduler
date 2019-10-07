@@ -6,10 +6,11 @@ void thread_run(){
 int count = 0;
   //while(count < 10){
   while(1){
+	//getNumProcessesInTCB();
     printf("Thread Running\n", my_pthread_self());
 	count++;
   }
-	//getNumProcessesInTCB();
+	getNumProcessesInTCB();
 
 }
 
