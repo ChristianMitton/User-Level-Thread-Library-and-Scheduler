@@ -7,6 +7,9 @@ int containsRunnableEntries();
 
 static uint thread_id = 1;
 
+struct sigaction sa;
+struct itimerval timer;
+
 /* Scheduler State */
  // Fill in Here //
 my_pthread_tcb *schedulerHead = NULL;
@@ -24,13 +27,20 @@ void schedule(int signum){
   // Implement Here
 
 	printf("In schedule\n");
-
 	
 	//point to main
 	my_pthread_tcb *main = schedulerHead;
 	my_pthread_tcb *nextThread = schedulerHead->next;
+	//swapcontext(&main->context, &nextThread->context);
+
+	//setitimer (ITIMER_VIRTUAL, &timer, NULL);
+	while(containsRunnableEntries() == 1){
+		swapcontext(&main->context, &nextThread->context);
+		//printf("1\n");
+	}
+
 	//setcontext(&nextThread->context);
-	setcontext(&main->context);
+	//setcontext(&main->context);
 	printf("set\n");
 
 
@@ -88,11 +98,35 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 	//...replaces newEntry's temp context with the new context specified by function input..?
 	makecontext(&newEntry->context,(void (*) (void))function, 0);
 
-
 	enqueueThreadToTCB(&schedulerHead, newEntry);
 
-	schedule(1);
+	//schedule(1);
+	
+	/*----- 
+	 TIMER
+	-----*/
+	
 
+	/*struct sigaction sa;
+	struct itimerval timer;*/
+
+	 /* Install timer_handler as the signal handler for SIGVTALRM. */
+	 //memset (&sa, 0, sizeof (sa));
+	 sa.sa_handler = &schedule;
+	 sigaction (SIGVTALRM, &sa, NULL);
+
+	 /* Configure the timer to expire after 250 msec... */
+	 timer.it_value.tv_sec = 0;
+	 //timer.it_value.tv_usec = 250000;
+	 timer.it_value.tv_usec = TIME_QUANTUM_MS;
+	 /* ... and every 250 msec after that. */
+	 timer.it_interval.tv_sec = 0;
+	 //timer.it_interval.tv_usec = 250000;
+	 timer.it_value.tv_usec = TIME_QUANTUM_MS;
+	 /* Start a virtual timer. It counts down whenever this process is
+	   executing. */
+	 setitimer (ITIMER_VIRTUAL, &timer, NULL);
+	 //setitimer (ITIMER_PROF, &timer, NULL);
 
 }
 
@@ -130,9 +164,11 @@ int containsRunnableEntries(){
 	my_pthread_tcb *ptr = schedulerHead;
 
 	while(ptr->next != ptr){
+		/*
 		if(ptr->tid == 0){
 			continue;
 		}
+		*/
 		if(ptr->status == RUNNABLE){
 			return 1;
 		}
