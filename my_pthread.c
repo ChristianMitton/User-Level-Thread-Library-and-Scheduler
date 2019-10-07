@@ -13,8 +13,7 @@ struct itimerval timer;
 /* Scheduler State */
  // Fill in Here //
 my_pthread_tcb *schedulerHead = NULL;
-//my_pthread_tcb *scheduleFunctionContext = NULL;
-my_pthread_tcb *currentThread = NULL;
+my_pthread_tcb *globalCurrentThread = NULL;
 
 //---------------------------------------------------------------------------------------
 //-----------------------------------schedule--------------------------------------------
@@ -29,20 +28,33 @@ void schedule(int signum){
 
 	printf("In schedule\n");
 
-	currentThread = schedulerHead;
+	globalCurrentThread = schedulerHead;
 	
-	//point to main
-	my_pthread_tcb *main = schedulerHead;
+	//point to main first time scheduler is called
+	my_pthread_tcb *currentThread = schedulerHead;
 	my_pthread_tcb *nextThread = schedulerHead->next;
+
 	//Increment scheduler head
 	schedulerHead = schedulerHead->next;
+
+	//---increment schedulerhead to next thread that is runnable START-----------------------------
+	
+	if(containsRunnableEntries()) {
+		my_pthread_tcb *ptr = nextThread;
+		while(ptr->status != RUNNABLE){
+			ptr = ptr->next;			
+		}
+		nextThread = ptr;
+	}
+	
+	//----increment schedulerhead to next thread that is runnable END-----------------------------
 		
 	//sa.sa_handler = &schedule;
 	//sigaction (SIGPROF, &sa, NULL);
 
 	setitimer (ITIMER_PROF, &timer, NULL);
 
-	swapcontext(&main->context, &nextThread->context);
+	swapcontext(&currentThread->context, &nextThread->context);
 
 
 }
@@ -56,10 +68,7 @@ void returnToMain(){
 //---------------------------------------------------------------------------------------
 
 /*
-	
-
-	mainThreadEntry ---> thread_1 --->
-
+	mainThread ---> thread_1 --->
 */
 
 
@@ -175,7 +184,8 @@ int containsRunnableEntries(){
 		ptr = ptr->next;
 	}
 	//account for last entry
-	if((ptr->status == RUNNABLE) && (ptr->tid != 0)){
+	//if((ptr->status == RUNNABLE) && (ptr->tid != 0)){
+	if((ptr->status == RUNNABLE)){
 		return 1;
 	}
 
@@ -238,11 +248,10 @@ void my_pthread_join(my_pthread_t thread){
 /* Returns the thread id of the currently running thread
  */
 my_pthread_t my_pthread_self(){
+ 
+ // Implement Here //
 
-
-  // Implement Here //
-
-  return currentThread->tid; // temporary return, replace this
+  return globalCurrentThread->tid;
 
 }
 
@@ -257,6 +266,12 @@ void my_pthread_exit(){
 
   // Implement Here //
 
+	//mark thread as finished
+	globalCurrentThread->status = FINISHED;
+
+	//THIS PART IS HANDLED IN SCHEDULER: 
+		//invoke scheduler to switch to next runnable thread
+	
 }
 
 
