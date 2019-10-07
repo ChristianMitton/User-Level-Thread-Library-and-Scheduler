@@ -5,7 +5,7 @@ void enqueueThreadToTCB(my_pthread_tcb **head, my_pthread_tcb *newEntry);
 my_pthread_tcb *createEntry();
 int containsRunnableEntries();
 
-static uint thread_id = 1;
+static uint thread_id = 2;
 
 struct sigaction sa;
 struct itimerval timer;
@@ -14,6 +14,7 @@ struct itimerval timer;
  // Fill in Here //
 my_pthread_tcb *schedulerHead = NULL;
 //my_pthread_tcb *scheduleFunctionContext = NULL;
+my_pthread_tcb *currentThread = NULL;
 
 //---------------------------------------------------------------------------------------
 //-----------------------------------schedule--------------------------------------------
@@ -26,38 +27,27 @@ my_pthread_tcb *schedulerHead = NULL;
 void schedule(int signum){
   // Implement Here
 
-
 	printf("In schedule\n");
+
+	currentThread = schedulerHead;
 	
 	//point to main
 	my_pthread_tcb *main = schedulerHead;
 	my_pthread_tcb *nextThread = schedulerHead->next;
+	//Increment scheduler head
 	schedulerHead = schedulerHead->next;
-	//swapcontext(&main->context, &nextThread->context);
-
-	//setitimer (ITIMER_VIRTUAL, &timer, NULL);
 		
-	sa.sa_handler = &schedule;
-	sigaction (SIGPROF, &sa, NULL);
+	//sa.sa_handler = &schedule;
+	//sigaction (SIGPROF, &sa, NULL);
 
 	setitimer (ITIMER_PROF, &timer, NULL);
 
-	//while(containsRunnableEntries() == 1){
-		//save current context in current thread context swap to next context
-		swapcontext(&main->context, &nextThread->context);
-		//printf("1\n");
-	//}
-	
-
-	//setcontext(&nextThread->context);
-	//setcontext(&main->context);
-	printf("set\n");
+	swapcontext(&main->context, &nextThread->context);
 
 
 }
 
 void returnToMain(){
-	printf("in returnToMain\n");
 	return;
 }
 
@@ -83,7 +73,7 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 	//Create TCB entry for main thread if not created
 	if(schedulerHead == NULL){
 		my_pthread_tcb *mainThreadEntry = createEntry();
-		mainThreadEntry->tid = 0;
+		mainThreadEntry->tid = 1;
 		//After this thread is done it returns to main?
 		mainThreadEntry->context.uc_link = NULL;
 
@@ -93,14 +83,6 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 		//make first entry to schedulerHead queue to be main
 		enqueueThreadToTCB(&schedulerHead,mainThreadEntry);
 
-		//create context to scheduleFunction
-		/*
-		scheduleFunctionContext = createEntry();
-
-		getcontext(&scheduleFunctionContext->context);
-		makecontext(&scheduleFunctionContext->context,(void (*) (void))schedule, 0);
-		*/
-
 	}
 
 	//Create new TCB entry
@@ -109,7 +91,7 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 
 	//points to main thread when done?:
 	//newEntry->context.uc_link = &schedulerHead->context;
-	//newEntry->context.uc_link = &scheduleFunctionContext->context;
+	//newEntry->context.uc_link = &sscheduleFunctionContext->context;
 
 	//Gets current context, puts it as a temp context for newEntry and then...
 	getcontext(&newEntry->context);
@@ -119,12 +101,11 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 
 	enqueueThreadToTCB(&schedulerHead, newEntry);
 
-	//schedule(1);`
 	
 	/*----- 
 	 TIMER
 	-----*/
-	
+	 
 
 	/*struct sigaction sa;
 	struct itimerval timer;*/
@@ -137,7 +118,7 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 	 /* Configure the timer to expire after 250 msec... */
 	 timer.it_value.tv_sec = 0;
 	 //timer.it_value.tv_usec = 250000;
-	 timer.it_value.tv_usec = TIME_QUANTUM_MS;
+	 timer.it_value.tv_usec = TIME_QUANTUM_MS; //250000
 	 /* ... and every 250 msec after that. */
 	 timer.it_interval.tv_sec = 0;
 	 //timer.it_interval.tv_usec = 250000;
@@ -145,7 +126,6 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 	 /* Start a virtual timer. It counts down whenever this process is
 	   executing. */
 	 setitimer (ITIMER_PROF, &timer, NULL);
-	 //setitimer (ITIMER_PROF, &timer, NULL);
 
 }
 
@@ -259,9 +239,10 @@ void my_pthread_join(my_pthread_t thread){
  */
 my_pthread_t my_pthread_self(){
 
+
   // Implement Here //
 
-  return 0; // temporary return, replace this
+  return currentThread->tid; // temporary return, replace this
 
 }
 
@@ -282,23 +263,3 @@ void my_pthread_exit(){
 
 
 
-
-
-
-
-	/*
-	//loop through entries
-
-	//Note, main entry isn't considered a runnable entry
-
-	
-	while(containsRunnableEntries()){
-
-		//if at main thread (id == 0)continue
-		
-		
-		//switch to next thread
-	}
-	*/
-
-	//swap back to main thread
