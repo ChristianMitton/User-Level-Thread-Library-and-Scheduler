@@ -1,9 +1,16 @@
 #include "my_pthread.h"
 #define STACK_SIZE SIGSTKSZ
 
+void enqueueThreadToTCB(my_pthread_tcb **head, my_pthread_tcb *newEntry);
+my_pthread_tcb *createEntry();
+int containsRunnableEntries();
+
+static uint thread_id = 1;
+
 /* Scheduler State */
  // Fill in Here //
-my_pthread_tcb *blockHead = NULL;
+my_pthread_tcb *schedulerHead = NULL;
+my_pthread_tcb *scheduleFunctionContext = NULL;
 
 //---------------------------------------------------------------------------------------
 //-----------------------------------schedule--------------------------------------------
@@ -12,10 +19,26 @@ my_pthread_tcb *blockHead = NULL;
 /* Scheduler Function
  * Pick the next runnable thread and swap contexts to start executing
  */
-void schedule(int signum){
 
+void schedule(int signum){
   // Implement Here
 
+	printf("In schedule\n");
+
+	
+	//point to main
+	my_pthread_tcb *main = schedulerHead;
+	my_pthread_tcb *nextThread = schedulerHead->next;
+	//setcontext(&nextThread->context);
+	setcontext(&main->context);
+	printf("set\n");
+
+
+}
+
+void returnToMain(){
+	printf("in returnToMain\n");
+	return;
 }
 
 //---------------------------------------------------------------------------------------
@@ -29,129 +52,124 @@ void schedule(int signum){
 void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg){
   // Implement Here
 
-	my_pthread_tcb *newEntry = malloc(sizeof(my_pthread_tcb));
-	//newEntry->tid = id of new thread
+	//Create TCB entry for main thread if not created
+	if(schedulerHead == NULL){
+		my_pthread_tcb *mainThreadEntry = createEntry();
+		mainThreadEntry->tid = 0;
+		//After this thread is done it returns to main?
+		mainThreadEntry->context.uc_link = NULL;
+
+		getcontext(&mainThreadEntry->context);
+		makecontext(&mainThreadEntry->context,(void (*) (void))returnToMain, 0);
+
+		//make first entry to schedulerHead queue to be main
+		enqueueThreadToTCB(&schedulerHead,mainThreadEntry);
+
+		//create context to scheduleFunction
+		scheduleFunctionContext = createEntry();
+
+		getcontext(&scheduleFunctionContext->context);
+		makecontext(&scheduleFunctionContext->context,(void (*) (void))schedule, 0);
+		
+
+	}
+
+	//Create new TCB entry
+	my_pthread_tcb *newEntry = createEntry();
+	newEntry->tid = thread_id; thread_id += 1;
+
+	//points to main thread when done?:
+	//newEntry->context.uc_link = &schedulerHead->context;
+	//newEntry->context.uc_link = &scheduleFunctionContext->context;
+
+	//Gets current context, puts it as a temp context for newEntry and then...
+	getcontext(&newEntry->context);
+
+	//...replaces newEntry's temp context with the new context specified by function input..?
+	makecontext(&newEntry->context,(void (*) (void))function, 0);
+
+
+	enqueueThreadToTCB(&schedulerHead, newEntry);
+
+	schedule(1);
+
+
+}
+
+my_pthread_tcb *createEntry(){
+	my_pthread_tcb *newEntry = malloc(sizeof(my_pthread_t));
+
 	newEntry->status = RUNNABLE;
 	newEntry->context.uc_link = NULL;
 	newEntry->context.uc_stack.ss_sp = malloc(SIGSTKSZ);
 	newEntry->context.uc_stack.ss_size = SIGSTKSZ;
-	//newEntry->context.uc_stack.ss_flags = 0;
-	//newEntry->next = NULL;
-	
-	getcontext(&newEntry->context);
-	/*if (getcontext(&newEntry->context) < 0) {
-		perror("getcontext");
-		exit(1);
-	}*/
+	newEntry->context.uc_stack.ss_flags = 0;
 
-	//makecontext(&newEntry->context,(void *)&function, 0);
-	makecontext(&newEntry->context,(void (*) (void))function, 0);
-	printf("1\n");
-	setcontext(&newEntry->context);
-	printf("2\n");
-	//swapcontext(&nctx,&newEntry);
-
-	/*
-	ucontext_t cctx,ncctx;
-	
-	if (getcontext(&cctx) <0) {
-		printf("Error getting context. ");
-		perror("getcontext");
-		exit(1);
-	}
-
-	void *stack=malloc(STACK_SIZE);
-    
-      	if (stack==NULL) {
-        	perror("Failed to allocate stack");
-        	exit(1);
-	}
-
-    
-      	cctx.uc_link=NULL;
-    
-      	cctx.uc_stack.ss_sp=stack;
-    
-      	cctx.uc_stack.ss_size=STACK_SIZE;
-    
-     	cctx.uc_stack.ss_flags=0;
-
-	puts(" about to call make  context");
-    	//makecontext(&cctx,(void *)&simplef,0);
-	makecontext(&cctx,(void *)&function,0);
-   	puts("Successfully modified context");
-	
-    
-    	setcontext(&cctx);
-	*/
-
-	printf("You tried to create a new thread\n");
-	//return *function;
-
+	return newEntry;
 }
 
-void enqueueThreadToTCB(my_pthread_t *newThread){
-	my_pthread_tcb *newEntry = malloc(sizeof(my_pthread_tcb));
-	//newEntry->tid = id of new thread
-	newEntry->status = RUNNABLE;
-	//newEntry->context = u context
-	newEntry->next = NULL;
+void enqueueThreadToTCB(my_pthread_tcb **head, my_pthread_tcb *newEntry){
 
-	if(blockHead == NULL) {
-		blockHead = newEntry;
-		blockHead->next = blockHead;
+	if(*head == NULL){
+		(*head) = newEntry;
+		(*head)->next = (*head);
 		return;
 	}
 
-	my_pthread_tcb *ptr = blockHead;
-	
-	while(ptr->next != blockHead){
+	my_pthread_tcb *ptr = (*head);
+	while(ptr->next != *head){
 		ptr = ptr->next;
 	}
 
 	ptr->next = newEntry;
-	newEntry->next = blockHead;
+	ptr->next->next = (*head);
+}
+
+int containsRunnableEntries(){
+
+	my_pthread_tcb *ptr = schedulerHead;
+
+	while(ptr->next != ptr){
+		if(ptr->tid == 0){
+			continue;
+		}
+		if(ptr->status == RUNNABLE){
+			return 1;
+		}
+		
+		ptr = ptr->next;
+	}
+	//account for last entry
+	if((ptr->status == RUNNABLE) && (ptr->tid != 0)){
+		return 1;
+	}
+
+	return 0;
 
 }
 
 void getNumProcessesInTCB(){
-	my_pthread_tcb *ptr = blockHead;
-	if(ptr == NULL){
-		printf("There are 0 processes in the TCB\n");
-		return;	
-	}
-	if(ptr->next = ptr){
-		printf("There is 1 process in the TCB\n");
-		return;	
-	}	
-	int numProcesses = 1;
-	while(ptr->next != ptr){
-		numProcesses++;
-		ptr = ptr->next;
-	}
-	printf("There are %d processes in the TCB\n",numProcesses);
-	return;	
-}
-/*
-void addThreadToEndOfTCB(my_pthread_t *newThread){
-	my_pthread_tcb *newEntry = malloc(sizeof(my_pthread_tcb));
-	//newEntry->tid = id of new thread
-	newEntry->status = RUNNABLE;
-	//newEntry->context = u context
-	newEntry->next = NULL;
-
-	if (*block == NULL) {		
-		(*block) = newEntry;
+	if(schedulerHead == NULL){
+		printf("There are 0 entries in TCB\n");
 		return;
 	}
 
-	my_pthread_tcb *ptr = (*block);
-	while(ptr->next != NULL){
+	my_pthread_tcb *ptr = schedulerHead;
+
+	int numProcesses = 0;
+
+	while(ptr->next != schedulerHead){
+		numProcesses++;
 		ptr = ptr->next;
 	}
-	ptr->next = newEntry;
+	//Account for the last entry
+	numProcesses++;
+
+	printf("%d thread(s) in the TCB\n",numProcesses);
+
+	return;	
 }
-*/
+
 
 //---------------------------------------------------------------------------------------
 //-------------------------------my_pthread_yield()--------------------------------------
@@ -204,3 +222,28 @@ void my_pthread_exit(){
   // Implement Here //
 
 }
+
+
+
+
+
+
+
+
+
+	/*
+	//loop through entries
+
+	//Note, main entry isn't considered a runnable entry
+
+	
+	while(containsRunnableEntries()){
+
+		//if at main thread (id == 0)continue
+		
+		
+		//switch to next thread
+	}
+	*/
+
+	//swap back to main thread
