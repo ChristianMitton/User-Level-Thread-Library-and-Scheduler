@@ -30,7 +30,7 @@ void schedule(int signum){
 
 	globalCurrentThread = schedulerHead;
 	
-	//point to main first time scheduler is called
+	//currentThread points to main first time scheduler is called
 	my_pthread_tcb *currentThread = schedulerHead;
 	my_pthread_tcb *nextThread = schedulerHead->next;
 
@@ -225,6 +225,7 @@ void getNumProcessesInTCB(){
 void my_pthread_yield(){
 
   // Implement Here
+	
 
 }
 
