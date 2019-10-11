@@ -17,6 +17,8 @@ my_pthread_tcb *schedulerHead = NULL;
 my_pthread_tcb *globalCurrentThread = NULL;
 my_pthread_tcb *mainThread = NULL;
 
+my_pthread_t threadToJoinWith = -1;
+
 //---------------------------------------------------------------------------------------
 //-----------------------------------schedule--------------------------------------------
 //---------------------------------------------------------------------------------------
@@ -27,9 +29,43 @@ my_pthread_tcb *mainThread = NULL;
 
 void schedule(int signum){
   // Implement Here
+	printf("in schedule\n");
+	//----join START------------------------------------------------------------
+	
+	if(signum == -2){
+	//if(signum == -2 && !everyOneExceptMainHasFinished()){
+
+		my_pthread_tcb *ptr = schedulerHead;
+		printf("trying to join\n");
+		if(threadToJoinWith != -1){
+			while(ptr->tid != threadToJoinWith){
+				ptr = ptr->next;
+			}
+		}
+		//at this point, ptr should point to the tcb entry whose id equals threadToJoinWith of the current context
+
+		if(ptr->status == RUNNABLE){
+			globalCurrentThread = schedulerHead;
+			
+			my_pthread_tcb *currentThread = schedulerHead;
+			my_pthread_tcb *nextThread = schedulerHead->next;
+		
+			schedulerHead = ptr;
+			currentThread->threadToJoinWith = threadToJoinWith;
+			//ptr->context.uc_link = &currentThread->context;
+			swapcontext(&currentThread->context, &ptr->context);
+		}
+		//currentThread->status = SLEEP;
+		//return;
+	//}
+	}
+
+
+	//printf("passed join code\n");
+		
+	//----join END------------------------------------------------------------
 	
 	//----yeild START------------------------------------------------------------
-	
 	if(signum == -1){
 		globalCurrentThread = schedulerHead;
 		
@@ -38,10 +74,18 @@ void schedule(int signum){
 	
 		schedulerHead = schedulerHead->next;
 
+		if(containsRunnableEntries()) {
+			my_pthread_tcb *ptr = nextThread;
+			while(ptr->status != RUNNABLE){
+				ptr = ptr->next;			
+			}
+			//currentThread->context.uc_link = &nextThread->context;
+			nextThread = ptr;
+		}
+
 		swapcontext(&currentThread->context, &nextThread->context);
 		
 	}
-	
 	//----yeild END------------------------------------------------------------
 
 	globalCurrentThread = schedulerHead;
@@ -67,7 +111,6 @@ void schedule(int signum){
 	}
 	
 	//----increment schedulerhead to next thread that is runnable END-----------------------------
-
 
 	setitimer (ITIMER_PROF, &timer, NULL);
 
@@ -158,6 +201,7 @@ my_pthread_tcb *createEntry(){
 	newEntry->context.uc_stack.ss_sp = malloc(SIGSTKSZ);
 	newEntry->context.uc_stack.ss_size = SIGSTKSZ;
 	newEntry->context.uc_stack.ss_flags = 0;
+	newEntry->threadToJoinWith = -1;
 
 	return newEntry;
 }
@@ -252,6 +296,9 @@ void my_pthread_join(my_pthread_t thread){
 
   // Implement Here //
 
+	threadToJoinWith = thread;
+	schedule(-2);
+
 }
 
 //---------------------------------------------------------------------------------------
@@ -282,7 +329,7 @@ void my_pthread_exit(){
 	//mark thread as finished
 	globalCurrentThread->status = FINISHED;
 
-	//THIS PART IS HANDLED IN SCHEDULER: 
+	//THIS NEXT PART IS HANDLED IN SCHEDULER: 
 		//invoke scheduler to switch to next runnable thread
 	
 }

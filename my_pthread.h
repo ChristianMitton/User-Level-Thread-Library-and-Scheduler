@@ -22,6 +22,8 @@ typedef struct threadControlBlock{
   status_t status;    // Thread Status
   ucontext_t context; // Ucontext
   struct threadControlBlock* next;
+  //Personal addition:
+  my_pthread_t threadToJoinWith;
 } my_pthread_tcb;
 
 
