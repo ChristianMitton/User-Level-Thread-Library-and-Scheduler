@@ -3,21 +3,13 @@
 #include "my_pthread.h"
 
 void thread_run(){
-int count = 0;
-  //while(count < 10){
   while(1){
-	//getNumProcessesInTCB();
-    printf("Thread Running\n", my_pthread_self());
-	count++;
+    printf("Thread %d Running\n", my_pthread_self());
   }
-	getNumProcessesInTCB();
-
 }
 
 int main(){
 
-	printf("in main\n");
-	getNumProcessesInTCB();
   my_pthread_t thread;
 
   my_pthread_create(&thread, (void*) thread_run, (void*) NULL);

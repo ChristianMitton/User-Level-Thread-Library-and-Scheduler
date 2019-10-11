@@ -6,6 +6,7 @@ my_pthread_tcb *createEntry();
 int containsRunnableEntries();
 
 static uint thread_id = 2;
+int yeild = 0;
 
 struct sigaction sa;
 struct itimerval timer;
@@ -14,6 +15,7 @@ struct itimerval timer;
  // Fill in Here //
 my_pthread_tcb *schedulerHead = NULL;
 my_pthread_tcb *globalCurrentThread = NULL;
+my_pthread_tcb *mainThread = NULL;
 
 //---------------------------------------------------------------------------------------
 //-----------------------------------schedule--------------------------------------------
@@ -25,8 +27,22 @@ my_pthread_tcb *globalCurrentThread = NULL;
 
 void schedule(int signum){
   // Implement Here
+	
+	//----yeild START------------------------------------------------------------
+	
+	if(signum == -1){
+		globalCurrentThread = schedulerHead;
+		
+		my_pthread_tcb *currentThread = schedulerHead;
+		my_pthread_tcb *nextThread = schedulerHead->next;
+	
+		schedulerHead = schedulerHead->next;
 
-	printf("In schedule\n");
+		swapcontext(&currentThread->context, &nextThread->context);
+		
+	}
+	
+	//----yeild END------------------------------------------------------------
 
 	globalCurrentThread = schedulerHead;
 	
@@ -34,8 +50,10 @@ void schedule(int signum){
 	my_pthread_tcb *currentThread = schedulerHead;
 	my_pthread_tcb *nextThread = schedulerHead->next;
 
+
 	//Increment scheduler head
 	schedulerHead = schedulerHead->next;
+
 
 	//---increment schedulerhead to next thread that is runnable START-----------------------------
 	
@@ -44,13 +62,12 @@ void schedule(int signum){
 		while(ptr->status != RUNNABLE){
 			ptr = ptr->next;			
 		}
+		//currentThread->context.uc_link = &nextThread->context;
 		nextThread = ptr;
 	}
 	
 	//----increment schedulerhead to next thread that is runnable END-----------------------------
-		
-	//sa.sa_handler = &schedule;
-	//sigaction (SIGPROF, &sa, NULL);
+
 
 	setitimer (ITIMER_PROF, &timer, NULL);
 
@@ -91,6 +108,7 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 
 		//make first entry to schedulerHead queue to be main
 		enqueueThreadToTCB(&schedulerHead,mainThreadEntry);
+		mainThread = mainThreadEntry;
 
 	}
 
@@ -100,7 +118,8 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 
 	//points to main thread when done?:
 	//newEntry->context.uc_link = &schedulerHead->context;
-	//newEntry->context.uc_link = &sscheduleFunctionContext->context;
+	newEntry->context.uc_link = &mainThread->context;
+	//newEntry->context.uc_link = NULL;
 
 	//Gets current context, puts it as a temp context for newEntry and then...
 	getcontext(&newEntry->context);
@@ -114,26 +133,19 @@ void my_pthread_create(my_pthread_t *thread, void*(*function)(void*), void *arg)
 	/*----- 
 	 TIMER
 	-----*/
-	 
-
-	/*struct sigaction sa;
-	struct itimerval timer;*/
 
 	 /* Install timer_handler as the signal handler for SIGVTALRM. */
 	 //memset (&sa, 0, sizeof (sa));
 	 sa.sa_handler = &schedule;
 	 sigaction (SIGPROF, &sa, NULL);
 
-	 /* Configure the timer to expire after 250 msec... */
+	 // Configure the timer to expire after TIME_QUANTUM_MS msec...
 	 timer.it_value.tv_sec = 0;
-	 //timer.it_value.tv_usec = 250000;
-	 timer.it_value.tv_usec = TIME_QUANTUM_MS; //250000
-	 /* ... and every 250 msec after that. */
-	 timer.it_interval.tv_sec = 0;
-	 //timer.it_interval.tv_usec = 250000;
 	 timer.it_value.tv_usec = TIME_QUANTUM_MS;
-	 /* Start a virtual timer. It counts down whenever this process is
-	   executing. */
+	 // ... and every TIME_QUANTUM_MS msec after that.
+	 timer.it_interval.tv_sec = 0;
+	 timer.it_value.tv_usec = TIME_QUANTUM_MS;
+	 // Start a prof timer. It counts down whenever this process is executing.
 	 setitimer (ITIMER_PROF, &timer, NULL);
 
 }
@@ -225,8 +237,8 @@ void getNumProcessesInTCB(){
 void my_pthread_yield(){
 
   // Implement Here
-	
 
+	schedule(-1);
 }
 
 //---------------------------------------------------------------------------------------
